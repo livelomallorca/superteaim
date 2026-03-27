@@ -2,6 +2,7 @@
 Watchdog. Monitors agent health. Restarts frozen containers.
 Alerts via Telegram (optional) if an agent keeps crashing.
 Recovers stuck tasks from Redis.
+v0.3: auto-autonomy escalation (hourly evaluation).
 """
 import os
 import time
@@ -12,11 +13,13 @@ from datetime import datetime, timezone
 import docker
 import redis
 import httpx
+import psycopg2
 
 log = logging.getLogger("watchdog")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [watchdog] %(message)s")
 
 REDIS_URL = os.environ["REDIS_URL"]
+POSTGRES_URL = os.environ.get("POSTGRES_URL", "")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
@@ -29,8 +32,14 @@ AGENT_PREFIXES = ["boss-agent", "researcher-agent", "writer-agent",
 HEALTH_TIMEOUT = 120
 CRASH_THRESHOLD = 3
 STUCK_TASK_TIMEOUT = 600  # 10 minutes
+AUTONOMY_CHECK_INTERVAL = 3600  # 1 hour
 
 crash_counts: dict[str, list[float]] = {}
+
+
+def _get_db():
+    """Get a PostgreSQL connection."""
+    return psycopg2.connect(POSTGRES_URL)
 
 
 def discover_agents() -> list[str]:
@@ -136,8 +145,102 @@ def check_stuck_tasks():
         log.error(f"Stuck task check failed: {e}")
 
 
+def evaluate_autonomy():
+    """Promote or demote agents based on their task track record.
+
+    Promotion L0→L1: 50+ tasks, <2% error rate, 14+ days at L0.
+    Promotion L1→L2: 200+ tasks, <1% error rate, 30+ days at L1.
+    Demotion (immediate): >10% error rate in last 7 days.
+    """
+    if not POSTGRES_URL:
+        return
+    try:
+        conn = _get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                aa.agent_name,
+                aa.current_level,
+                aa.promoted_at,
+                COUNT(at.id) AS total_tasks,
+                ROUND(AVG(CASE WHEN at.status = 'failed' THEN 1.0 ELSE 0.0 END)::numeric, 4)
+                    AS error_rate,
+                ROUND(
+                    COUNT(CASE WHEN at.started_at > NOW() - INTERVAL '7 days'
+                               AND at.status = 'failed' THEN 1 END)::numeric /
+                    NULLIF(COUNT(CASE WHEN at.started_at > NOW() - INTERVAL '7 days'
+                                     THEN 1 END), 0),
+                    4
+                ) AS error_rate_7d
+            FROM agent_autonomy aa
+            LEFT JOIN agent_tasks at
+                ON at.agent_name = aa.agent_name
+                AND at.status IN ('completed', 'failed')
+            GROUP BY aa.agent_name, aa.current_level, aa.promoted_at
+        """)
+
+        now = datetime.now(timezone.utc)
+        for row in cur.fetchall():
+            agent, level, promoted_at, total, error_rate, error_rate_7d = row
+            new_level = level
+            reason = None
+
+            err7d = float(error_rate_7d) if error_rate_7d is not None else None
+            err_all = float(error_rate) if error_rate is not None else None
+
+            # Demotion: >10% error rate in last 7 days
+            if err7d is not None and err7d > 0.10:
+                new_level = max(0, level - 1)
+                reason = f"error_rate_7d={err7d:.1%} > 10%"
+
+            # Promotion L0 → L1
+            elif (level == 0 and (total or 0) >= 50
+                  and err_all is not None and err_all < 0.02):
+                if promoted_at:
+                    pa = promoted_at if promoted_at.tzinfo else promoted_at.replace(tzinfo=timezone.utc)
+                    days = (now - pa).days
+                else:
+                    days = 0
+                if days >= 14:
+                    new_level = 1
+                    reason = f"{total} tasks, {err_all:.1%} errors, {days}d at L0"
+
+            # Promotion L1 → L2
+            elif (level == 1 and (total or 0) >= 200
+                  and err_all is not None and err_all < 0.01):
+                if promoted_at:
+                    pa = promoted_at if promoted_at.tzinfo else promoted_at.replace(tzinfo=timezone.utc)
+                    days = (now - pa).days
+                else:
+                    days = 0
+                if days >= 30:
+                    new_level = 2
+                    reason = f"{total} tasks, {err_all:.1%} errors, {days}d at L1"
+
+            if new_level != level:
+                cur.execute("""
+                    UPDATE agent_autonomy
+                    SET current_level = %s, promoted_at = NOW()
+                    WHERE agent_name = %s
+                """, (new_level, agent))
+                cur.execute("""
+                    INSERT INTO autonomy_history (agent_name, from_level, to_level, reason)
+                    VALUES (%s, %s, %s, %s)
+                """, (agent, level, new_level, reason))
+                action = "promoted" if new_level > level else "demoted"
+                msg = f"Autonomy: {agent} {action} L{level}->L{new_level} ({reason})"
+                log.info(msg)
+                send_alert(msg)
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error(f"Autonomy evaluation failed: {e}")
+
+
 def main():
     log.info("Watchdog starting. Monitoring agents...")
+    last_autonomy_check = 0
 
     while True:
         agents = discover_agents()
@@ -150,6 +253,12 @@ def main():
                 log.debug(f"{agent}: OK")
 
         check_stuck_tasks()
+
+        now = time.time()
+        if now - last_autonomy_check >= AUTONOMY_CHECK_INTERVAL:
+            evaluate_autonomy()
+            last_autonomy_check = now
+
         time.sleep(30)
 
 
