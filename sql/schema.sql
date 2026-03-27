@@ -43,9 +43,11 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
     tokens_in INTEGER DEFAULT 0,
     tokens_out INTEGER DEFAULT 0,
     cost_usd NUMERIC(10,6) DEFAULT 0,
-    status TEXT CHECK (status IN ('running', 'completed', 'failed')),
+    status TEXT CHECK (status IN ('running', 'completed', 'failed', 'pending_approval', 'rejected')),
     error_message TEXT,
     autonomy_level INTEGER DEFAULT 0,
+    approved_by TEXT,
+    approved_at TIMESTAMP,
     started_at TIMESTAMP DEFAULT NOW(),
     completed_at TIMESTAMP
 );
@@ -61,10 +63,20 @@ CREATE TABLE IF NOT EXISTS agent_autonomy (
     total_tasks INTEGER DEFAULT 0,
     error_count INTEGER DEFAULT 0,
     consecutive_successes INTEGER DEFAULT 0,
-    promoted_at TIMESTAMP,
+    promoted_at TIMESTAMP DEFAULT NOW(),
     demoted_at TIMESTAMP,
     last_error TEXT,
     last_review TIMESTAMP
+);
+
+-- ── Autonomy History (audit trail) ──────────────────────────
+CREATE TABLE IF NOT EXISTS autonomy_history (
+    id SERIAL PRIMARY KEY,
+    agent_name TEXT NOT NULL,
+    from_level INTEGER,
+    to_level INTEGER,
+    reason TEXT,
+    changed_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ── Token Budgets ───────────────────────────────────────────
@@ -91,6 +103,8 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
     priority INTEGER DEFAULT 5,
     enabled BOOLEAN DEFAULT TRUE,
     last_run TIMESTAMP,
+    next_run TIMESTAMP,
+    run_count INTEGER DEFAULT 0,
     max_runtime_minutes INTEGER DEFAULT 10,
     created_at TIMESTAMP DEFAULT NOW(),
     notes TEXT
@@ -176,3 +190,21 @@ ON CONFLICT (org_id, agent_name) DO NOTHING;
 INSERT INTO agent_registry (agent_name) VALUES
     ('researcher'), ('writer'), ('coder'), ('analyst'), ('ops'), ('worker'), ('boss'), ('watchdog')
 ON CONFLICT (agent_name) DO NOTHING;
+
+-- ── Live Migration (safe for existing installs) ─────────────
+-- These ALTER statements are idempotent — safe to re-run on existing databases.
+
+-- agent_tasks: add approval columns and new status values
+ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS approved_by TEXT;
+ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP;
+ALTER TABLE agent_tasks DROP CONSTRAINT IF EXISTS agent_tasks_status_check;
+ALTER TABLE agent_tasks ADD CONSTRAINT agent_tasks_status_check
+    CHECK (status IN ('running', 'completed', 'failed', 'pending_approval', 'rejected'));
+
+-- scheduled_tasks: add heartbeat tracking columns
+ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS next_run TIMESTAMP;
+ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS run_count INTEGER DEFAULT 0;
+
+-- agent_autonomy: ensure promoted_at has a default
+ALTER TABLE agent_autonomy ALTER COLUMN promoted_at SET DEFAULT NOW();
+UPDATE agent_autonomy SET promoted_at = NOW() WHERE promoted_at IS NULL;

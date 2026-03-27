@@ -17,6 +17,10 @@ services:
       POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
       BOSS_API_KEY: ${BOSS_API_KEY:?BOSS_API_KEY must be set in .env}
       BOSS_MODEL: ${BOSS_MODEL:-fast}
+      BOSS_EXTERNAL_URL: ${BOSS_EXTERNAL_URL:-http://localhost:8080}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      VAULT_KEYWORDS: ${VAULT_KEYWORDS:-password,credential,secret,private,confidential,personal,financial}
     depends_on:
       - redis
       - litellm

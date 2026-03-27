@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>superteaim — Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #e0e0f0; font-family: 'Courier New', monospace; font-size: 13px; }
+  header { background: #16213e; border-bottom: 1px solid #2a2a5a; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 16px; color: #7c83fd; letter-spacing: 2px; }
+  header .meta { color: #666; font-size: 11px; }
+  .auth-gate { display: flex; align-items: center; justify-content: center; height: 80vh; flex-direction: column; gap: 12px; }
+  .auth-gate input { background: #16213e; border: 1px solid #2a2a5a; color: #e0e0f0; padding: 10px 16px; width: 300px; font-family: monospace; font-size: 13px; border-radius: 4px; }
+  .auth-gate input:focus { outline: none; border-color: #7c83fd; }
+  .auth-gate button, button.action { background: #7c83fd; color: #fff; border: none; padding: 8px 18px; cursor: pointer; font-family: monospace; font-size: 12px; border-radius: 4px; }
+  .auth-gate button:hover, button.action:hover { background: #5c63cd; }
+  button.reject { background: #c0392b; }
+  button.reject:hover { background: #922b21; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; padding: 16px; }
+  .card { background: #16213e; border: 1px solid #2a2a5a; border-radius: 6px; }
+  .card h2 { padding: 10px 14px; border-bottom: 1px solid #2a2a5a; font-size: 12px; color: #7c83fd; letter-spacing: 1px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 .badge { background: #c0392b; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 10px; }
+  .card h2 .badge.green { background: #27ae60; }
+  .card-body { padding: 10px 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { color: #666; font-weight: normal; text-align: left; padding: 4px 6px; font-size: 11px; }
+  td { padding: 4px 6px; border-top: 1px solid #1e2d50; word-break: break-all; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-green { background: #27ae60; }
+  .dot-yellow { background: #f39c12; }
+  .dot-red { background: #c0392b; }
+  .dot-blue { background: #3498db; }
+  .dot-gray { background: #666; }
+  .level-bar { display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: #2a2a5a; margin-right: 2px; }
+  .level-bar.filled { background: #7c83fd; }
+  .empty-msg { color: #555; font-size: 12px; padding: 12px 0; text-align: center; }
+  .refresh-note { color: #444; font-size: 10px; padding: 4px 14px 8px; }
+  .error-banner { background: #3d1010; border: 1px solid #c0392b; color: #e74c3c; padding: 10px 16px; margin: 16px; border-radius: 4px; }
+  .loading { color: #555; font-size: 12px; padding: 20px; text-align: center; }
+  .approve-row { display: flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>superteaim</h1>
+  <span class="meta" id="last-refresh">—</span>
+</header>
+
+<!-- Auth gate: shown before key is set -->
+<div class="auth-gate" id="auth-gate">
+  <div style="color:#7c83fd;font-size:14px;margin-bottom:8px;">Enter BOSS_API_KEY</div>
+  <input type="password" id="api-key-input" placeholder="Bearer key from .env"
+         onkeydown="if(event.key==='Enter') saveKey()">
+  <button onclick="saveKey()">Connect</button>
+  <div style="color:#555;font-size:11px;margin-top:8px;">Stored in sessionStorage only.</div>
+</div>
+
+<!-- Main dashboard: shown after auth -->
+<div id="main" style="display:none">
+  <div id="error-banner" class="error-banner" style="display:none"></div>
+  <div class="grid" id="grid">
+    <div class="loading">Loading...</div>
+  </div>
+  <div class="refresh-note" id="refresh-note"></div>
+</div>
+
+<script>
+const API = '';  // same origin
+
+function getKey() { return sessionStorage.getItem('boss_api_key') || ''; }
+
+function saveKey() {
+  const k = document.getElementById('api-key-input').value.trim();
+  if (!k) return;
+  sessionStorage.setItem('boss_api_key', k);
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  fetchStatus();
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Authorization': 'Bearer ' + getKey(), 'Content-Type': 'application/json' },
+    ...opts
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem('boss_api_key');
+    document.getElementById('auth-gate').style.display = 'flex';
+    document.getElementById('main').style.display = 'none';
+    throw new Error('Unauthorized');
+  }
+  return res.json();
+}
+
+async function approveTask(taskId) {
+  await apiFetch('/tasks/' + taskId + '/approve', { method: 'POST' });
+  fetchStatus();
+}
+
+async function rejectTask(taskId) {
+  await apiFetch('/tasks/' + taskId + '/reject', { method: 'POST' });
+  fetchStatus();
+}
+
+function statusDot(status) {
+  const map = {
+    running: 'dot-green', completed: 'dot-green', healthy: 'dot-green',
+    failed: 'dot-red', rejected: 'dot-red',
+    pending_approval: 'dot-yellow', queued: 'dot-blue',
+    requeued: 'dot-yellow', timeout: 'dot-red'
+  };
+  const cls = map[status] || 'dot-gray';
+  return `<span class="status-dot ${cls}"></span>${status}`;
+}
+
+function levelBars(level) {
+  let h = '';
+  for (let i = 0; i < 3; i++) {
+    h += `<span class="level-bar${i < level ? ' filled' : ''}"></span>`;
+  }
+  return h + ` L${level}`;
+}
+
+function relTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return d.toLocaleDateString();
+}
+
+function renderAgents(agents) {
+  if (!agents.length) return '<div class="empty-msg">No agents registered.</div>';
+  let rows = '<table><tr><th>Agent</th><th>Status</th><th>Tasks</th><th>Errors</th></tr>';
+  for (const a of agents) {
+    rows += `<tr>
+      <td>${a.agent}</td>
+      <td>${statusDot(a.status)}</td>
+      <td>${a.total_tasks}</td>
+      <td>${a.total_errors}</td>
+    </tr>`;
+  }
+  return rows + '</table>';
+}
+
+function renderPending(pending) {
+  if (!pending.length) return '<div class="empty-msg">No tasks pending approval.</div>';
+  let html = '';
+  for (const t of pending) {
+    html += `<div style="border-top:1px solid #1e2d50;padding:8px 0">
+      <div style="color:#f39c12;margin-bottom:4px">${t.task_id} → <strong>${t.agent}</strong></div>
+      <div style="color:#aaa;margin-bottom:6px">${t.prompt}</div>
+      <div style="color:#555;font-size:11px;margin-bottom:6px">${relTime(t.created_at)}</div>
+      <div class="approve-row">
+        <button class="action" onclick="approveTask('${t.task_id}')">Approve</button>
+        <button class="action reject" onclick="rejectTask('${t.task_id}')">Reject</button>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderTasks(tasks) {
+  if (!tasks.length) return '<div class="empty-msg">No recent tasks.</div>';
+  let rows = '<table><tr><th>Agent</th><th>Status</th><th>Zone</th><th>Task</th><th>When</th></tr>';
+  for (const t of tasks) {
+    rows += `<tr>
+      <td>${t.agent}</td>
+      <td>${statusDot(t.status)}</td>
+      <td>${t.zone || '—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.task}">${t.task}</td>
+      <td style="white-space:nowrap">${relTime(t.started)}</td>
+    </tr>`;
+  }
+  return rows + '</table>';
+}
+
+function renderBudgets(budgets) {
+  if (!budgets.length) return '<div class="empty-msg">No budget data.</div>';
+  let rows = '<table><tr><th>Agent</th><th>Tokens used</th><th>$ used</th><th>Limit</th></tr>';
+  for (const b of budgets) {
+    const pct = b.token_limit ? Math.round(100 * b.tokens_used / b.token_limit) : 0;
+    const color = pct > 80 ? '#c0392b' : pct > 50 ? '#f39c12' : '#27ae60';
+    rows += `<tr>
+      <td>${b.agent}</td>
+      <td><span style="color:${color}">${(b.tokens_used||0).toLocaleString()}</span> / ${(b.token_limit||0).toLocaleString()}</td>
+      <td>$${(b.dollars_used||0).toFixed(2)}</td>
+      <td>$${(b.dollar_limit||0).toFixed(2)}</td>
+    </tr>`;
+  }
+  return rows + '</table>';
+}
+
+function renderAutonomy(autonomy) {
+  if (!autonomy.length) return '<div class="empty-msg">No autonomy data.</div>';
+  let rows = '<table><tr><th>Agent</th><th>Level</th><th>Tasks</th><th>Errors</th><th>Since</th></tr>';
+  for (const a of autonomy) {
+    rows += `<tr>
+      <td>${a.agent}</td>
+      <td>${levelBars(a.level)}</td>
+      <td>${a.total_tasks}</td>
+      <td>${a.error_count}</td>
+      <td>${relTime(a.promoted_at)}</td>
+    </tr>`;
+  }
+  return rows + '</table>';
+}
+
+function renderSchedule(schedule) {
+  if (!schedule.length) return '<div class="empty-msg">No scheduled tasks.</div>';
+  let rows = '<table><tr><th>Agent</th><th>Every</th><th>Runs</th><th>Next</th></tr>';
+  for (const s of schedule) {
+    rows += `<tr>
+      <td>${s.agent}</td>
+      <td>${s.interval_minutes}m</td>
+      <td>${s.run_count || 0}</td>
+      <td>${relTime(s.next_run)}</td>
+    </tr>`;
+  }
+  return rows + '</table>';
+}
+
+async function fetchStatus() {
+  const errEl = document.getElementById('error-banner');
+  try {
+    const data = await apiFetch('/status');
+    errEl.style.display = 'none';
+
+    const pendingCount = (data.pending || []).length;
+
+    document.getElementById('grid').innerHTML = `
+      <div class="card">
+        <h2>Agents <span class="badge green">${(data.agents||[]).length}</span></h2>
+        <div class="card-body">${renderAgents(data.agents || [])}</div>
+      </div>
+      <div class="card">
+        <h2>Pending Approvals ${pendingCount ? `<span class="badge">${pendingCount}</span>` : ''}</h2>
+        <div class="card-body">${renderPending(data.pending || [])}</div>
+      </div>
+      <div class="card" style="grid-column:span 2">
+        <h2>Recent Tasks <span class="badge green">${(data.recent_tasks||[]).length}</span></h2>
+        <div class="card-body">${renderTasks(data.recent_tasks || [])}</div>
+      </div>
+      <div class="card">
+        <h2>Budgets (today)</h2>
+        <div class="card-body">${renderBudgets(data.budgets || [])}</div>
+      </div>
+      <div class="card">
+        <h2>Autonomy Levels</h2>
+        <div class="card-body">${renderAutonomy(data.autonomy || [])}</div>
+      </div>
+      <div class="card">
+        <h2>Schedule</h2>
+        <div class="card-body">${renderSchedule(data.schedule || [])}</div>
+      </div>
+    `;
+
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '—';
+    document.getElementById('last-refresh').textContent = 'Updated ' + ts;
+    document.getElementById('refresh-note').textContent = 'Auto-refreshes every 30s';
+  } catch (e) {
+    if (e.message !== 'Unauthorized') {
+      errEl.textContent = 'Error fetching status: ' + e.message;
+      errEl.style.display = 'block';
+    }
+  }
+}
+
+// Init
+if (getKey()) {
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  fetchStatus();
+}
+
+// Auto-refresh every 30s
+setInterval(() => { if (getKey()) fetchStatus(); }, 30000);
+</script>
+</body>
+</html>

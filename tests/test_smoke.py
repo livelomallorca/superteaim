@@ -260,7 +260,7 @@ def test_auth_on_endpoints():
     )
     for m in route_pattern.finditer(content):
         path, func_name, body = m.group(1), m.group(2), m.group(3)
-        if path == "/health":
+        if path in ("/health", "/dashboard"):
             continue
         if ("hmac.compare_digest" not in body
                 and "Authorization" not in body
@@ -358,6 +358,7 @@ def test_required_files_exist():
         "config/prometheus.yml", "config/Caddyfile",
         "agents/worker/worker.py", "agents/worker/Dockerfile", "agents/worker/requirements.txt",
         "agents/boss/boss.py", "agents/boss/Dockerfile", "agents/boss/requirements.txt",
+        "agents/boss/templates/dashboard.html",
         "agents/watchdog/watchdog.py", "agents/watchdog/Dockerfile", "agents/watchdog/requirements.txt",
         "sql/schema.sql",
         "scripts/backup.sh", "scripts/security-scan.sh", "scripts/index-knowledge.py",
@@ -371,6 +372,58 @@ def test_required_files_exist():
             print(f"  OK: {fname}")
         else:
             error(f"{fname}: MISSING")
+
+
+def test_v03_features():
+    """v0.3 features are present in source files."""
+    print("Checking v0.3 features...")
+
+    # Heartbeat loop in boss
+    boss_path = os.path.join(ROOT, "agents", "boss", "boss.py")
+    with open(boss_path) as f:
+        boss_src = f.read()
+    if "heartbeat_loop" not in boss_src:
+        error("boss.py: heartbeat_loop function missing")
+    else:
+        print("  OK: heartbeat_loop in boss.py")
+
+    if "classify_zone" not in boss_src:
+        error("boss.py: classify_zone function missing")
+    else:
+        print("  OK: classify_zone in boss.py")
+
+    if "pending_approval" not in boss_src:
+        error("boss.py: pending_approval status missing")
+    else:
+        print("  OK: pending_approval in boss.py")
+
+    # Autonomy evaluation in watchdog
+    watchdog_path = os.path.join(ROOT, "agents", "watchdog", "watchdog.py")
+    with open(watchdog_path) as f:
+        watchdog_src = f.read()
+    if "evaluate_autonomy" not in watchdog_src:
+        error("watchdog.py: evaluate_autonomy function missing")
+    else:
+        print("  OK: evaluate_autonomy in watchdog.py")
+
+    # autonomy_history table in schema
+    schema_path = os.path.join(ROOT, "sql", "schema.sql")
+    with open(schema_path) as f:
+        schema_src = f.read()
+    if "autonomy_history" not in schema_src:
+        error("schema.sql: autonomy_history table missing")
+    else:
+        print("  OK: autonomy_history in schema.sql")
+
+    if "pending_approval" not in schema_src:
+        error("schema.sql: pending_approval status missing from agent_tasks constraint")
+    else:
+        print("  OK: pending_approval in schema.sql")
+
+    if "next_run" not in schema_src:
+        error("schema.sql: next_run column missing from scheduled_tasks")
+    else:
+        print("  OK: next_run in schema.sql")
 
 
 if __name__ == "__main__":
@@ -402,6 +455,8 @@ if __name__ == "__main__":
     test_redis_healthcheck_auth()
     print()
     test_no_watchtower()
+    print()
+    test_v03_features()
     print()
 
     if ERRORS:
