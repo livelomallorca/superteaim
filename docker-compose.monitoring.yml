@@ -1,0 +1,58 @@
+# superteaim — Monitoring Services
+# Usage: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+
+services:
+
+  # ── Prometheus ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    restart: always
+    networks:
+      - superteaim-net
+
+  # ── Grafana ────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
+    volumes:
+      - grafanadata:/var/lib/grafana
+    restart: always
+    depends_on:
+      - prometheus
+    networks:
+      - superteaim-net
+
+  # ── Node Exporter (host metrics) ───────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: always
+    networks:
+      - superteaim-net
+
+volumes:
+  prometheusdata:
+  grafanadata:
+
+networks:
+  superteaim-net:
+    external: true
+    name: superteaim_superteaim-net

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>superteaim — Sovereign AI Infrastructure</title>
+  <meta name="description" content="Clone, configure, run. Your agents, your hardware, your data. A complete Docker Compose stack for autonomous AI agents on your own hardware.">
+  <meta property="og:title" content="superteaim — Sovereign AI Infrastructure">
+  <meta property="og:description" content="Clone, configure, run. Your agents, your hardware, your data.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://superteaim.com">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F9E0;</text></svg>">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-elevated: #141414;
+      --bg-card: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text-dim: #888;
+      --accent: #00d4aa;
+      --accent-dim: rgba(0, 212, 170, 0.15);
+      --code-bg: #111;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      padding: 12px 0;
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav .wordmark {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    nav .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-left: 24px;
+      transition: color 0.2s;
+    }
+    nav .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* HERO */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+    }
+    .hero-logo {
+      font-family: var(--mono);
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+    /* <img src="logo.png" alt="superteaim" class="hero-logo-img"> */
+    .hero-logo-img {
+      height: 64px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .hero .subhead {
+      font-size: 20px;
+      color: var(--text-dim);
+      max-width: 540px;
+      margin: 0 auto 40px;
+    }
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      margin-bottom: 48px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 28px;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0a0a;
+    }
+    .btn-primary:hover { opacity: 0.85; text-decoration: none; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--text-dim); text-decoration: none; }
+
+    .terminal {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 520px;
+      margin: 0 auto;
+      text-align: left;
+      overflow-x: auto;
+    }
+    .terminal code {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+    .terminal .prompt { color: var(--accent); }
+    .terminal .comment { color: var(--text-dim); }
+
+    /* SECTIONS */
+    section {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    section h2 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+    }
+    section .section-sub {
+      color: var(--text-dim);
+      font-size: 17px;
+      margin-bottom: 48px;
+      max-width: 600px;
+    }
+
+    /* SERVICES GRID */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .service-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .service-card .icon { font-size: 24px; margin-bottom: 8px; }
+    .service-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .service-card p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .optional {
+      margin-top: 24px;
+      padding: 16px 20px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .optional strong { color: var(--text); }
+
+    /* SOCKETS */
+    .sockets-list {
+      display: grid;
+      gap: 12px;
+    }
+    .socket-row {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      align-items: center;
+    }
+    .socket-name {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .socket-desc {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    /* INTELLIGENCE */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      padding: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .feature-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .no-deps {
+      margin-top: 24px;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--accent);
+    }
+
+    /* DATA SOVEREIGNTY */
+    .zones {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .zone-card {
+      padding: 24px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .zone-vault {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+    }
+    .zone-library { background: var(--bg-card); }
+    .zone-card h3 {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .zone-vault h3 { color: var(--accent); }
+    .zone-card ul {
+      list-style: none;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .zone-card li { padding: 4px 0; }
+    .zone-card li::before {
+      content: "- ";
+      color: var(--text-dim);
+    }
+    .zone-default {
+      margin-top: 24px;
+      font-size: 15px;
+      color: var(--text-dim);
+    }
+    .zone-default strong { color: var(--accent); }
+
+    /* QUICKSTART */
+    .quickstart-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      max-width: 600px;
+      overflow-x: auto;
+    }
+    .quickstart-block code {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+    .quickstart-block .prompt { color: var(--accent); }
+    .quickstart-block .comment { color: var(--text-dim); }
+    .requirements {
+      margin-top: 32px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .requirements strong { color: var(--text); }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    footer p { margin-bottom: 8px; }
+    footer .tagline {
+      font-style: italic;
+      margin-top: 16px;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 640px) {
+      .hero { padding: 120px 0 60px; }
+      .hero-logo { font-size: 36px; }
+      .hero h1 { font-size: 28px; }
+      .hero .subhead { font-size: 17px; }
+      .socket-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+      .zones { grid-template-columns: 1fr; }
+      nav .nav-links a { margin-left: 16px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container">
+      <span class="wordmark">superteaim</span>
+      <div class="nav-links">
+        <a href="#architecture">Architecture</a>
+        <a href="#intelligence">Intelligence</a>
+        <a href="https://github.com/livelomallorca/superteaim">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <!-- Replace with: <img src="logo.png" alt="superteaim" class="hero-logo-img"> -->
+      <div class="hero-logo">SUPERTEAIM</div>
+      <h1>Sovereign AI infrastructure</h1>
+      <p class="subhead">Clone, configure, run. Your agents, your hardware, your data.</p>
+      <div class="cta-group">
+        <a href="https://github.com/livelomallorca/superteaim#what-is-this" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/livelomallorca/superteaim" class="btn btn-secondary">View on GitHub</a>
+      </div>
+      <div class="terminal">
+        <code>
+          <span class="comment"># 3 commands to start</span><br>
+          <span class="prompt">$</span> cp config/.env.example .env<br>
+          <span class="prompt">$</span> nano .env<br>
+          <span class="prompt">$</span> docker compose up -d
+        </code>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT'S IN THE BOX -->
+  <section id="services">
+    <div class="container">
+      <h2>What's in the box</h2>
+      <p class="section-sub">A complete Docker Compose stack for running autonomous AI agents on your own hardware. No cloud dependencies.</p>
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="icon">&#x1F418;</div>
+          <h3>PostgreSQL</h3>
+          <p>Task log, budgets, autonomy tracking, schedules</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x26A1;</div>
+          <h3>Redis</h3>
+          <p>Task queue between boss and workers</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x1F9E0;</div>
+          <h3>ChromaDB</h3>
+          <p>Vector memory for RAG</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x1F500;</div>
+          <h3>LiteLLM</h3>
+          <p>Model router — local + cloud fallback</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x1F451;</div>
+          <h3>Boss Agent</h3>
+          <p>Plans tasks, dispatches to workers, collects results</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x1F6E0;</div>
+          <h3>Worker Agents</h3>
+          <p>Execute tasks with reflection + memory</p>
+        </div>
+        <div class="service-card">
+          <div class="icon">&#x1F440;</div>
+          <h3>Watchdog</h3>
+          <p>Monitors health, restarts frozen containers</p>
+        </div>
+      </div>
+      <div class="optional">
+        <strong>Optional profiles:</strong> Prometheus + Grafana (monitoring), OpenBao (secrets), Caddy (reverse proxy + auto-TLS), Open WebUI (chat), Watchtower (auto-update)
+      </div>
+    </div>
+  </section>
+
+  <!-- SOCKET ARCHITECTURE -->
+  <section id="architecture">
+    <div class="container">
+      <h2>Socket Architecture</h2>
+      <p class="section-sub">We provide sockets — standard interfaces that any framework can connect to. Swap components without touching code.</p>
+      <div class="sockets-list">
+        <div class="socket-row">
+          <span class="socket-name">LiteLLM</span>
+          <span class="socket-desc">OpenAI-compatible API &mdash; plug in LangGraph, CrewAI, AutoGen, any OpenAI client</span>
+        </div>
+        <div class="socket-row">
+          <span class="socket-name">Redis queues</span>
+          <span class="socket-desc">tasks:{agent}, results:boss &mdash; custom orchestrators, n8n, any queue consumer</span>
+        </div>
+        <div class="socket-row">
+          <span class="socket-name">PostgreSQL</span>
+          <span class="socket-desc">agent_tasks, agent_budgets, agent_autonomy &mdash; Braintrust, Promptfoo, custom dashboards</span>
+        </div>
+        <div class="socket-row">
+          <span class="socket-name">ChromaDB</span>
+          <span class="socket-desc">Vector store API &mdash; LlamaIndex, Haystack, any RAG pipeline</span>
+        </div>
+        <div class="socket-row">
+          <span class="socket-name">Docker network</span>
+          <span class="socket-desc">superteaim-net bridge &mdash; any new container joins and connects</span>
+        </div>
+        <div class="socket-row">
+          <span class="socket-name">.env config</span>
+          <span class="socket-desc">All behavior configurable &mdash; swap components without touching code</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUILT-IN INTELLIGENCE -->
+  <section id="intelligence">
+    <div class="container">
+      <h2>Built-in Intelligence</h2>
+      <p class="section-sub">No external framework dependencies. These capabilities are built into the agents.</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3>Reflection</h3>
+          <p>Workers self-check output before returning. Configurable via ENABLE_REFLECTION.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Memory</h3>
+          <p>Workers query past similar tasks from PostgreSQL before processing.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Planning</h3>
+          <p>Boss breaks complex requests into parallel + sequential subtasks.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Autonomy Levels</h3>
+          <p>Agents earn trust through track record. L0 supervised to L2 autonomous.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Token Budgets</h3>
+          <p>Per-agent daily limits prevent runaway costs. Full control over spend.</p>
+        </div>
+      </div>
+      <p class="no-deps">// no langchain. no llamaindex. no framework lock-in.</p>
+    </div>
+  </section>
+
+  <!-- DATA SOVEREIGNTY -->
+  <section id="sovereignty">
+    <div class="container">
+      <h2>Data Sovereignty</h2>
+      <p class="section-sub">Every request is classified before routing. Your sensitive data never leaves your network.</p>
+      <div class="zones">
+        <div class="zone-card zone-vault">
+          <h3>VAULT</h3>
+          <ul>
+            <li>Local storage only</li>
+            <li>Processed by local models only</li>
+            <li>Never leaves your network</li>
+            <li>HR, finance, credentials, PII</li>
+          </ul>
+        </div>
+        <div class="zone-card zone-library">
+          <h3>LIBRARY</h3>
+          <ul>
+            <li>Can be stored anywhere</li>
+            <li>Any model including cloud APIs</li>
+            <li>Public docs, research, open data</li>
+            <li>Non-sensitive by classification</li>
+          </ul>
+        </div>
+      </div>
+      <p class="zone-default">If unsure, the Boss Agent <strong>defaults to VAULT</strong> &mdash; local only.</p>
+    </div>
+  </section>
+
+  <!-- QUICK START -->
+  <section id="quickstart">
+    <div class="container">
+      <h2>Quick Start</h2>
+      <p class="section-sub">Up and running in under a minute.</p>
+      <div class="quickstart-block">
+        <code>
+          <span class="comment"># Clone and configure</span><br>
+          <span class="prompt">$</span> git clone https://github.com/livelomallorca/superteaim.git<br>
+          <span class="prompt">$</span> cd superteaim<br>
+          <span class="prompt">$</span> cp config/.env.example .env<br>
+          <span class="prompt">$</span> nano .env <span class="comment"># set your INFERENCE_URL</span><br><br>
+          <span class="comment"># Launch</span><br>
+          <span class="prompt">$</span> docker compose up -d<br><br>
+          <span class="comment"># Or use the interactive wizard</span><br>
+          <span class="prompt">$</span> ./scripts/setup.sh
+        </code>
+      </div>
+      <div class="requirements">
+        <strong>Requirements:</strong> Docker + Compose v2, an inference endpoint (Ollama, vLLM, or cloud API), 4GB+ RAM. No GPU needed on the server.
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <p><a href="https://github.com/livelomallorca/superteaim">GitHub</a> &middot; <a href="https://github.com/livelomallorca/superteaim/blob/main/LICENSE">MIT License</a> &middot; <a href="https://github.com/livelomallorca/superteaim/releases">Releases</a></p>
+      <p class="tagline">Built for people who own their infrastructure.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

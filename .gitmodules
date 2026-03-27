@@ -1,0 +1,3 @@
+[submodule "agents/personas/community"]
+	path = agents/personas/community
+	url = https://github.com/msitarzewski/agency-agents.git

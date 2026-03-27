@@ -1,0 +1,30 @@
+# Caddyfile — Reverse proxy for superteaim
+# Caddy auto-provisions TLS when DOMAIN is set.
+# For local use (no domain), access services directly on their ports.
+
+{$DOMAIN:localhost} {
+    # LiteLLM API
+    handle /v1/* {
+        reverse_proxy litellm:4000
+    }
+
+    # Boss Agent API
+    handle /api/* {
+        reverse_proxy boss-agent:8080
+    }
+
+    # Grafana dashboard
+    handle /grafana/* {
+        reverse_proxy grafana:3000
+    }
+
+    # Open WebUI
+    handle /chat/* {
+        reverse_proxy open-webui:8080
+    }
+
+    # Default: show a simple status page
+    handle {
+        respond "superteaim is running" 200
+    }
+}

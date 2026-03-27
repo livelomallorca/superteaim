@@ -1,0 +1,240 @@
+# superteaim — Agent Services
+# Usage:
+#   Default:  docker compose -f docker-compose.yml -f docker-compose.agents.yml up -d
+#   Minimal:  ... --profile minimal up -d   (boss + 1 worker + watchdog)
+#   Full:     ... --profile full up -d       (boss + 5 workers + watchdog)
+
+services:
+
+  # ── Boss Agent ─────────────────────────────────────────
+  boss-agent:
+    build: ./agents/boss
+    ports:
+      - "127.0.0.1:${BOSS_PORT:-8080}:8080"
+    environment:
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      BOSS_API_KEY: ${BOSS_API_KEY:?BOSS_API_KEY must be set in .env}
+      BOSS_MODEL: ${BOSS_MODEL:-fast}
+    depends_on:
+      - redis
+      - litellm
+      - postgres
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - superteaim-net
+
+  # ── Researcher Agent ───────────────────────────────────
+  researcher-agent:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: researcher
+      AGENT_ROLE: Research Analyst
+      AGENT_GOAL: "Find accurate, relevant information. Cite sources. Never fabricate data."
+      AGENT_MODEL: ${REASONING_MODEL:-reasoning}
+      AGENT_QUEUE: "tasks:researcher"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: "300"
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Writer Agent ───────────────────────────────────────
+  writer-agent:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: writer
+      AGENT_ROLE: Business Writer
+      AGENT_GOAL: "Create clear, persuasive content. Match the user's tone. Always draft, never send."
+      AGENT_MODEL: ${REASONING_MODEL:-reasoning}
+      AGENT_QUEUE: "tasks:writer"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: "300"
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Coder Agent ────────────────────────────────────────
+  coder-agent:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: coder
+      AGENT_ROLE: Developer
+      AGENT_GOAL: "Write clean, working code. Never hardcode secrets. Test before delivering."
+      AGENT_MODEL: ${CODER_MODEL:-coder}
+      AGENT_QUEUE: "tasks:coder"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: "600"
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Analyst Agent ──────────────────────────────────────
+  analyst-agent:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: analyst
+      AGENT_ROLE: Data Analyst
+      AGENT_GOAL: "Find patterns. Present with numbers. Flag anomalies and risks."
+      AGENT_MODEL: ${REASONING_MODEL:-reasoning}
+      AGENT_QUEUE: "tasks:analyst"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: "300"
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Ops Agent ──────────────────────────────────────────
+  ops-agent:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: ops
+      AGENT_ROLE: Operations Manager
+      AGENT_GOAL: "Keep systems running. Handle routine tasks. Alert on issues."
+      AGENT_MODEL: ${FAST_MODEL:-fast}
+      AGENT_QUEUE: "tasks:ops"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: "120"
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Default Worker (minimal profile) ───────────────────
+  # A single general-purpose worker for the minimal setup
+  worker:
+    build: ./agents/worker
+    environment:
+      AGENT_NAME: worker
+      AGENT_ROLE: General Assistant
+      AGENT_GOAL: "Handle any task competently. Ask for clarification when needed."
+      AGENT_MODEL: ${FAST_MODEL:-fast}
+      AGENT_QUEUE: "tasks:worker"
+      LITELLM_URL: http://litellm:4000/v1
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TASK_TIMEOUT: ${DEFAULT_TASK_TIMEOUT:-300}
+      ENABLE_REFLECTION: ${ENABLE_REFLECTION:-true}
+      MAX_REASONING_STEPS: ${MAX_REASONING_STEPS:-2}
+      ENABLE_MEMORY: ${ENABLE_MEMORY:-true}
+      MEMORY_LOOKBACK_HOURS: ${MEMORY_LOOKBACK_HOURS:-72}
+    depends_on:
+      - redis
+      - litellm
+    restart: always
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - superteaim-net
+
+  # ── Watchdog ───────────────────────────────────────────
+  watchdog:
+    build: ./agents/watchdog
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-superteaim}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-superteaim}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+    restart: always
+    mem_limit: 128m
+    networks:
+      - superteaim-net
+
+networks:
+  superteaim-net:
+    external: true
+    name: superteaim_superteaim-net

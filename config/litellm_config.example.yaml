@@ -1,0 +1,58 @@
+# LiteLLM Model Router Configuration
+# Copy to litellm_config.yaml and adjust endpoints to match your setup.
+#
+# INFERENCE_URL in .env should point to your primary model server.
+# Add entries here for each model you want to expose.
+
+model_list:
+  # ── Local Models ───────────────────────────────────────
+  # Point api_base to wherever your models are running (Ollama, vLLM, etc.)
+
+  - model_name: "fast"
+    litellm_params:
+      model: "ollama/qwen3:8b"
+      api_base: "http://host.docker.internal:11434"
+    model_info:
+      description: "Quick answers, classification, routing"
+
+  - model_name: "reasoning"
+    litellm_params:
+      model: "ollama/qwen3:32b"
+      api_base: "http://host.docker.internal:11434"
+    model_info:
+      description: "Deep analysis, writing, strategy"
+
+  - model_name: "coder"
+    litellm_params:
+      model: "ollama/qwen3-coder-next"
+      api_base: "http://host.docker.internal:11434"
+    model_info:
+      description: "Code generation, debugging, automation"
+
+  # ── Cloud Fallback (uncomment to enable) ───────────────
+  # These are optional. Local models handle everything by default.
+  # When enabled, LiteLLM can fall back to cloud APIs if local is overloaded.
+
+  # - model_name: "claude"
+  #   litellm_params:
+  #     model: "claude-sonnet-4-20250514"
+  #     api_key: "os.environ/ANTHROPIC_API_KEY"
+
+  # - model_name: "openai"
+  #   litellm_params:
+  #     model: "gpt-4.1"
+  #     api_key: "os.environ/OPENAI_API_KEY"
+
+  # - model_name: "deepseek"
+  #   litellm_params:
+  #     model: "deepseek/deepseek-chat"
+  #     api_key: "os.environ/DEEPSEEK_API_KEY"
+
+router_settings:
+  routing_strategy: "simple-shuffle"
+  # Fallback chain: try local first, then cloud
+  fallbacks:
+    - {"fast": ["reasoning"]}
+    # Uncomment when cloud APIs are configured:
+    # - {"reasoning": ["claude"]}
+    # - {"coder": ["claude"]}

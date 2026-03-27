@@ -1,0 +1,126 @@
+# superteaim — Core Services
+# Usage:
+#   Default:  docker compose up -d                    (postgres + redis + chromadb + litellm)
+#   Minimal:  docker compose --profile minimal up -d  (postgres + redis + litellm only)
+#   Full:     docker compose --profile full up -d     (all core + openbao + caddy + open-webui)
+
+services:
+
+  # ── Database ───────────────────────────────────────────
+  postgres:
+    image: postgres:17.3-bookworm
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-superteaim}
+      POSTGRES_USER: ${POSTGRES_USER:-superteaim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-superteaim}"]
+      interval: 10s
+      retries: 5
+    networks:
+      - superteaim-net
+
+  # ── Task Queue ─────────────────────────────────────────
+  redis:
+    image: redis:7.4.6-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping"]
+      interval: 10s
+      retries: 3
+    networks:
+      - superteaim-net
+
+  # ── Vector Memory (RAG) ────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    ports:
+      - "127.0.0.1:${CHROMA_PORT:-8000}:8000"
+    environment:
+      CHROMA_SERVER_AUTHN_CREDENTIALS: ${CHROMA_TOKEN:?CHROMA_TOKEN must be set in .env}
+      CHROMA_SERVER_AUTHN_PROVIDER: chromadb.auth.token_authn.TokenAuthenticationServerProvider
+    volumes:
+      - chromadata:/chroma/chroma
+    restart: always
+    networks:
+      - superteaim-net
+
+  # ── Model Router ───────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.63.14.dev1
+    ports:
+      - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set in .env}
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - superteaim-net
+
+  # ── Secret Store (full profile) ────────────────────────
+  openbao:
+    image: quay.io/openbao/openbao:2.2.0
+    ports:
+      - "127.0.0.1:${OPENBAO_PORT:-8200}:8200"
+    volumes:
+      - baodata:/openbao/data
+    cap_add: [IPC_LOCK]
+    restart: always
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Reverse Proxy (full profile) ───────────────────────
+  caddy:
+    image: caddy:2.9.1-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    restart: always
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+  # ── Chat Interface (full profile) ──────────────────────
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:0.6.6
+    ports:
+      - "127.0.0.1:${WEBUI_PORT:-3001}:8080"
+    environment:
+      OLLAMA_BASE_URL: ${INFERENCE_URL:-http://host.docker.internal:11434}
+    restart: always
+    profiles: ["full"]
+    networks:
+      - superteaim-net
+
+volumes:
+  pgdata:
+  redisdata:
+  chromadata:
+  baodata:
+  caddydata:
+  caddyconfig:
+
+networks:
+  superteaim-net:
+    driver: bridge
