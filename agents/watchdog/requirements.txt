@@ -1,4 +1,4 @@
 docker==7.1.0
 redis==5.2.1
 httpx==0.28.1
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.11
